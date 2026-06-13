@@ -20,15 +20,15 @@ Run
 python bot.py
 ```
 
-The bot implements `/start` and echoes any text message.
+The bot implements `/start` and sends a payment welcome message when a user DMs it.
 
 Payment setup
 
-1. Add payment URLs to your environment file (see `.env.example`).
+1. Add payment URLs to your environment file.
 
 ```
-PAYMENT_URL_1=https://your-stripe-or-pay-link
-PAYMENT_URL_2=https://your-paypal-or-pay-link
+PAYMENT_URL_1=https://your-apple-pay-link
+PAYMENT_URL_2=https://your-crypto-pay-link
 ```
 
 When a new user messages the bot the first time it will receive a welcome message with payment buttons.

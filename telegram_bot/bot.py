@@ -20,7 +20,7 @@ async def send_welcome_payment(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Pay with Stripe", url=PAYMENT_URL_1), InlineKeyboardButton("Pay with PayPal", url=PAYMENT_URL_2)]
+        [InlineKeyboardButton("Apple Pay", url=PAYMENT_URL_1), InlineKeyboardButton("Crypto", url=PAYMENT_URL_2)]
     ])
 
     await update.message.reply_text(text, reply_markup=keyboard)
