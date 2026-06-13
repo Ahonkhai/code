@@ -4,6 +4,7 @@ import os
 import json
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
@@ -90,10 +91,18 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.answer()
     if query.data == "pay_crypto":
+        if not CRYPTO_ADDRESS or CRYPTO_ADDRESS == "TRXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX":
+            await query.message.reply_text(
+                "Crypto payment address is not configured. "
+                "Set CRYPTO_ADDRESS in your .env file and restart the bot."
+            )
+            return
+
         await query.message.reply_text(
             f"Send exactly $100 USDT to the following address on {CRYPTO_NETWORK}:\n\n"
             f"`{CRYPTO_ADDRESS}`\n\n"
-            "Then send your transaction hash to this chat using /verify <txhash>."
+            "Then send your transaction hash to this chat using /verify <txhash>.",
+            parse_mode=ParseMode.MARKDOWN,
         )
         return
     await query.message.reply_text("Payment verified! Constructing your single-use invite link..")
@@ -225,6 +234,9 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
+    print(f"Loaded CRYPTO_ADDRESS={CRYPTO_ADDRESS} CRYPTO_NETWORK={CRYPTO_NETWORK}")
+    if CRYPTO_ADDRESS == "TRXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX":
+        print("WARNING: CRYPTO_ADDRESS is using the default placeholder. Update .env and restart the bot.")
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("groupid", groupid))
     app.add_handler(CommandHandler("verify", verify_crypto_tx))
