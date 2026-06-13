@@ -5,7 +5,7 @@ import json
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Conflict
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -245,7 +245,19 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, send_welcome_payment))
     # handle payment button callbacks
     app.add_handler(CallbackQueryHandler(payment_callback, pattern=r"^pay_"))
-    app.run_polling()
+    try:
+        # Ensure no webhook is active which can cause getUpdates conflicts
+        try:
+            app.bot.delete_webhook(drop_pending_updates=True)
+            print("Deleted existing webhook (if any).")
+        except Exception as e:
+            print(f"Warning deleting webhook: {e}")
+
+        app.run_polling()
+    except Conflict as e:
+        print("Conflict error: another getUpdates request is running (another bot instance or webhook).")
+        print("Stop other instances or remove the webhook, then restart this bot.")
+        print(f"Details: {e}")
 
 if __name__ == "__main__":
     main()
