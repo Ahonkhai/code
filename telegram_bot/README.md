@@ -21,3 +21,14 @@ python bot.py
 ```
 
 The bot implements `/start` and echoes any text message.
+
+Payment setup
+
+1. Add payment URLs to your environment file (see `.env.example`).
+
+```
+PAYMENT_URL_1=https://your-stripe-or-pay-link
+PAYMENT_URL_2=https://your-paypal-or-pay-link
+```
+
+When a new user messages the bot the first time it will receive a welcome message with payment buttons.
