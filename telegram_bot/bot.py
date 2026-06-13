@@ -91,7 +91,7 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.answer()
     if query.data == "pay_crypto":
-        if not CRYPTO_ADDRESS or CRYPTO_ADDRESS == "TRXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX":
+        if not CRYPTO_ADDRESS:
             await query.message.reply_text(
                 "Crypto payment address is not configured. "
                 "Set CRYPTO_ADDRESS in your .env file and restart the bot."
