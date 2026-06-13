@@ -29,6 +29,16 @@ Payment setup
 ```
 PAYMENT_URL_1=https://your-apple-pay-link
 PAYMENT_URL_2=https://your-crypto-pay-link
+
+Group invite setup
+
+1. Add your private group's chat id to the environment so the bot can create single-use invite links:
+
+```
+GROUP_CHAT_ID=123456789    # use the numeric chat id of your private group
+```
+
+Make sure the bot is an admin in that group so it can create invite links.
 ```
 
 When a new user messages the bot the first time it will receive a welcome message with payment buttons.
