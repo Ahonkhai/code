@@ -15,9 +15,10 @@ PAYMENT_URL_2 = os.getenv("PAYMENT_URL_2", "https://example.com/pay2")
 
 async def send_welcome_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "👋 Welcome to the Premium Suite!\n\n"
-        "To engage with the community and unlock access to the Bundler utilities, a €100 entry fee is required. "
-        "Please choose your payment gateway below:"
+        "� The Bundler\n\n"
+        "Entry to the Suite is limited to approved members.\n\n"
+        "Unlock premium utilities, private channels, and exclusive resources with a one-time €100 access pass.\n\n"
+        "Choose your gateway below and begin your journey."
     )
 
     keyboard = InlineKeyboardMarkup([
@@ -67,7 +68,18 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except BadRequest as e:
             last_error = str(e)
 
-    await query.message.reply_text(f"Failed to create invite link for GROUP_CHAT_ID={group_id}: {last_error}")
+    await query.message.reply_text(
+        "Failed to create invite link. Please check that the bot is added to the group, "
+        "is an admin with invite-link permission, and that GROUP_CHAT_ID is correct. "
+        f"Last error: {last_error}"
+    )
+
+async def groupid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat and chat.type in ("group", "supergroup"):
+        await update.message.reply_text(f"This group chat id is: {chat.id}")
+    else:
+        await update.message.reply_text("Use this command inside the group to get the private group id.")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.text:
@@ -76,6 +88,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("groupid", groupid))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_welcome_payment))
     # handle payment button callbacks
     app.add_handler(CallbackQueryHandler(payment_callback, pattern=r"^pay_"))
