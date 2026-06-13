@@ -19,8 +19,8 @@ if not TOKEN:
 
 PAYMENT_URL_1 = os.getenv("PAYMENT_URL_1", "https://example.com/pay1")
 PAYMENT_URL_2 = os.getenv("PAYMENT_URL_2", "https://example.com/pay2")
-CRYPTO_ADDRESS = os.getenv("CRYPTO_ADDRESS", "TRXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-CRYPTO_NETWORK = os.getenv("CRYPTO_NETWORK", "TRC20")
+CRYPTO_ADDRESS = os.getenv("CRYPTO_ADDRESS", "0xe793872cF1562D2332350173511c529cAbE1817f")
+CRYPTO_NETWORK = os.getenv("CRYPTO_NETWORK", "ERC20")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 VERIFIED_USERS_FILE = os.path.join(os.path.dirname(__file__), "verified_users.json")
 USDT_DECIMALS = 6
@@ -235,8 +235,8 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     print(f"Loaded CRYPTO_ADDRESS={CRYPTO_ADDRESS} CRYPTO_NETWORK={CRYPTO_NETWORK}")
-    if CRYPTO_ADDRESS == "TRXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX":
-        print("WARNING: CRYPTO_ADDRESS is using the default placeholder. Update .env and restart the bot.")
+    if not CRYPTO_ADDRESS:
+        print("WARNING: CRYPTO_ADDRESS is not set. Update .env and restart the bot.")
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("groupid", groupid))
     app.add_handler(CommandHandler("verify", verify_crypto_tx))
