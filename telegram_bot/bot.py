@@ -12,6 +12,8 @@ if not TOKEN:
 
 PAYMENT_URL_1 = os.getenv("PAYMENT_URL_1", "https://example.com/pay1")
 PAYMENT_URL_2 = os.getenv("PAYMENT_URL_2", "https://example.com/pay2")
+CRYPTO_ADDRESS = os.getenv("CRYPTO_ADDRESS", "TRXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+CRYPTO_NETWORK = os.getenv("CRYPTO_NETWORK", "TRC20")
 
 async def send_welcome_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -47,6 +49,13 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query:
         return
     await query.answer()
+    if query.data == "pay_crypto":
+        await query.message.reply_text(
+            f"Send exactly $100 USDT to the following address on {CRYPTO_NETWORK}:\n\n"
+            f"`{CRYPTO_ADDRESS}`\n\n"
+            "Once payment is made, send a screenshot or message here and an admin will verify it manually."
+        )
+        return
     await query.message.reply_text("Payment verified! Constructing your single-use invite link..")
 
     group_id = os.getenv("GROUP_CHAT_ID")
@@ -89,7 +98,8 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("groupid", groupid))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_welcome_payment))
+    # only respond to direct/private chats for the payment prompt
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, send_welcome_payment))
     # handle payment button callbacks
     app.add_handler(CallbackQueryHandler(payment_callback, pattern=r"^pay_"))
     app.run_polling()
