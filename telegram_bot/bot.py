@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -29,12 +30,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_welcome_payment(update, context)
 
 
+def get_group_chat_id_candidates(group_id: str):
+    candidates = []
+    normalized = group_id.strip()
+
+    if normalized.startswith("-") and normalized[1:].isdigit():
+        candidates.append(int(normalized))
+    elif normalized.isdigit():
+        candidates.append(int(normalized))
+        candidates.append(int(f"-100{normalized}"))
+    return candidates
+
 async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
     await query.answer()
-    # send verification message immediately (we'll assume payment will be handled later)
     await query.message.reply_text("Payment verified! Constructing your single-use invite link..")
 
     group_id = os.getenv("GROUP_CHAT_ID")
@@ -42,12 +53,21 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("GROUP_CHAT_ID is not set in environment. Set it to enable invite link creation.")
         return
 
-    try:
-        chat_id = int(group_id)
-        invite = await context.bot.create_chat_invite_link(chat_id=chat_id, member_limit=1)
-        await query.message.reply_text(f"Here is your single-use invite link:\n{invite.invite_link}")
-    except Exception as e:
-        await query.message.reply_text(f"Failed to create invite link: {e}")
+    candidates = get_group_chat_id_candidates(group_id)
+    if not candidates:
+        await query.message.reply_text("GROUP_CHAT_ID is invalid. Use the numeric chat id of your private group.")
+        return
+
+    last_error = None
+    for chat_id in candidates:
+        try:
+            invite = await context.bot.create_chat_invite_link(chat_id=chat_id, member_limit=1)
+            await query.message.reply_text(f"Here is your single-use invite link:\n{invite.invite_link}")
+            return
+        except BadRequest as e:
+            last_error = str(e)
+
+    await query.message.reply_text(f"Failed to create invite link for GROUP_CHAT_ID={group_id}: {last_error}")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.text:
