@@ -151,6 +151,10 @@ async def restrict_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not update.message or not update.message.new_chat_members:
         return
 
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    if not chat_id:
+        return
+
     for member in update.message.new_chat_members:
         if member.is_bot:
             continue
@@ -169,7 +173,7 @@ async def restrict_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE
                 can_send_voice_notes=False,
             )
             await context.bot.restrict_chat_member(
-                chat_id=update.effective_chat.id,
+                chat_id=chat_id,
                 user_id=member.id,
                 permissions=permissions,
                 use_independent_chat_permissions=True,
@@ -178,7 +182,12 @@ async def restrict_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"Welcome {member.full_name}! You are in spectator mode until payment is verified. "
                 "Send me /start in private chat to begin payment."
             )
-        except BadRequest:
+        except BadRequest as e:
+            print(f"restrict_new_member failed for {member.id} in chat {chat_id}: {e}")
+            await update.message.reply_text(
+                "Unable to restrict new member automatically. "
+                "Make sure the bot is an admin with permission to restrict members."
+            )
             continue
 
 async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -317,7 +326,7 @@ def main():
     app.add_handler(CommandHandler("verify", verify_crypto_tx))
     app.add_handler(MessageHandler(filters.Regex(r"^0x[a-fA-F0-9]{64}$") & filters.ChatType.PRIVATE, verify_crypto_tx))
     # automatically restrict new members on join when group default allows sending
-    app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, restrict_new_member))
+    app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS & filters.ChatType.GROUPS, restrict_new_member))
     # only respond to direct/private chats for the payment prompt
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, send_welcome_payment))
     # handle payment button callbacks
