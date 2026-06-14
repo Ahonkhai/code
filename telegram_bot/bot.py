@@ -3,7 +3,7 @@ import asyncio
 import os
 import json
 import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatPermissions
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -118,11 +118,13 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Our system will verify the transaction automatically. Only valid, confirmed transaction hashes can be processed successfully."
         )
         return
-    await query.message.reply_text("Payment verified! Constructing your single-use invite link..")
 
+    # For Apple Pay or other payment methods
+    user_id = update.effective_user.id if update.effective_user else None
+    
     group_id = os.getenv("GROUP_CHAT_ID")
     if not group_id:
-        await query.message.reply_text("GROUP_CHAT_ID is not set in environment. Set it to enable invite link creation.")
+        await query.message.reply_text("GROUP_CHAT_ID is not set in environment. Set it to enable group access.")
         return
 
     candidates = get_group_chat_id_candidates(group_id)
@@ -133,16 +135,26 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     last_error = None
     for chat_id in candidates:
         try:
-            invite = await context.bot.create_chat_invite_link(chat_id=chat_id, member_limit=1)
-            await query.message.reply_text(f"Here is your single-use invite link:\n{invite.invite_link}")
+            permissions = ChatPermissions(can_send_messages=True)
+            await context.bot.restrict_chat_member(
+                chat_id=chat_id,
+                user_id=user_id,
+                permissions=permissions
+            )
+            if user_id:
+                add_verified_user(user_id, "apple_pay")
+            await query.message.reply_text(
+                "Payment verified! Your access has been activated.\n"
+                "You can now send messages in the group."
+            )
             return
         except BadRequest as e:
             last_error = str(e)
 
     await query.message.reply_text(
-        "Failed to create invite link. Please check that the bot is added to the group, "
-        "is an admin with invite-link permission, and that GROUP_CHAT_ID is correct. "
-        f"Last error: {last_error}"
+        "Payment verified, but we could not activate your group access. "
+        "Please ensure you have joined the group first. "
+        f"Error: {last_error}"
     )
 
 def verify_usdt_transaction(tx_hash: str):
@@ -223,19 +235,26 @@ async def verify_crypto_tx(update: Update, context: ContextTypes.DEFAULT_TYPE):
     last_error = None
     for chat_id in candidates:
         try:
-            invite = await context.bot.create_chat_invite_link(chat_id=chat_id, member_limit=1)
+            permissions = ChatPermissions(can_send_messages=True)
+            await context.bot.restrict_chat_member(
+                chat_id=chat_id,
+                user_id=user_id,
+                permissions=permissions
+            )
             if user_id:
                 add_verified_user(user_id, tx_hash)
-            await update.message.reply_text("Payment verified! Constructing your single-use invite link..")
-            await update.message.reply_text(f"Here is your single-use invite link:\n{invite.invite_link}")
+            await update.message.reply_text(
+                "Payment verified! Your access has been activated.\n"
+                "You can now send messages in the group."
+            )
             return
         except BadRequest as e:
             last_error = str(e)
 
     await update.message.reply_text(
-        "Failed to create invite link. Please check that the bot is added to the group, "
-        "is an admin with invite-link permission, and that GROUP_CHAT_ID is correct. "
-        f"Last error: {last_error}"
+        "Payment verified, but we could not activate your group access. "
+        "Please ensure you have joined the group first. "
+        f"Error: {last_error}"
     )
 
 
