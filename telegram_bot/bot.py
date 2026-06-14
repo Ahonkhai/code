@@ -98,11 +98,23 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Verify", callback_data="pay_verify")]
+        ])
+
         await query.message.reply_text(
             f"Send exactly $100 USDT to the following address on {CRYPTO_NETWORK}:\n\n"
             f"`{CRYPTO_ADDRESS}`\n\n"
-            "Then send your transaction hash to this chat using /verify <txhash>.",
+            "When the transfer is complete, click Verify and send your transaction hash.",
             parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
+        )
+        return
+
+    if query.data == "pay_verify":
+        await query.message.reply_text(
+            "Please send your transaction hash in this chat. "
+            "If the hash is incorrect, you will receive a failed transaction response."
         )
         return
     await query.message.reply_text("Payment verified! Constructing your single-use invite link..")
