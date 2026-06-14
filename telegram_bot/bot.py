@@ -132,12 +132,6 @@ async def grant_group_access(bot, user_id: int, tx_hash: str, reply_func):
                 use_independent_chat_permissions=True,
             )
             add_verified_user(user_id, tx_hash)
-            display_name = member.user.username or member.user.full_name
-            await bot.send_message(
-                chat_id=chat_id,
-                text=f"This {display_name} has been verified."
-            )
-            print(f"Verified {display_name} ({user_id}) in chat {chat_id}")
             await reply_func(
                 "Payment verified! Your access has been activated.\n"
                 "You can now send messages in the group."
@@ -162,7 +156,7 @@ async def restrict_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     for member in update.message.new_chat_members:
-        if member.is_bot or is_verified_user(member.id):
+        if member.is_bot:
             continue
 
         try:
