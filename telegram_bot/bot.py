@@ -113,8 +113,9 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "pay_verify":
         await query.message.reply_text(
-            "Please send your transaction hash in this chat. "
-            "If the hash is incorrect, you will receive a failed transaction response."
+            "Payment Confirmation Required\n\n"
+            "To complete your activation, please submit your transaction hash in this chat.\n\n"
+            "Our system will verify the transaction automatically. Only valid, confirmed transaction hashes can be processed successfully."
         )
         return
     await query.message.reply_text("Payment verified! Constructing your single-use invite link..")
@@ -196,8 +197,12 @@ async def verify_crypto_tx(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     success, details = verify_usdt_transaction(tx_hash)
     if not success:
-        await update.message.reply_text(f"Verification failed for tx {tx_hash}: {details}")
-        # {details} can contain sensitive info, so we won't include it in the user-facing message, but we will log it
+        await update.message.reply_text(
+            "Transaction verification failed:\n"
+            f"Transaction hash: `{tx_hash}`\n"
+            f"Reason: {details}",
+            parse_mode=ParseMode.MARKDOWN,
+        )
         return
 
     user_id = update.effective_user.id if update.effective_user else None
