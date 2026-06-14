@@ -85,6 +85,68 @@ def get_group_chat_id_candidates(group_id: str):
         candidates.append(int(f"-100{normalized}"))
     return candidates
 
+async def grant_group_access(bot, user_id: int, tx_hash: str, reply_func):
+    if not user_id:
+        await reply_func(
+            "Could not determine your Telegram user id. Please restart the bot and try again."
+        )
+        return False
+
+    group_id = os.getenv("GROUP_CHAT_ID")
+    if not group_id:
+        await reply_func("GROUP_CHAT_ID is not set in environment. Set it to enable group access.")
+        return False
+
+    candidates = get_group_chat_id_candidates(group_id)
+    if not candidates:
+        await reply_func("GROUP_CHAT_ID is invalid. Use the numeric chat id of your private group.")
+        return False
+
+    last_error = None
+    for chat_id in candidates:
+        try:
+            member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+            if member.status not in ("member", "administrator", "creator"):
+                await reply_func(
+                    "Please join the group first before your access can be activated. "
+                    "Then verify again."
+                )
+                return False
+
+            permissions = ChatPermissions(
+                can_send_messages=True,
+                can_send_polls=True,
+                can_send_other_messages=True,
+                can_add_web_page_previews=True,
+                can_send_audios=True,
+                can_send_documents=True,
+                can_send_photos=True,
+                can_send_videos=True,
+                can_send_video_notes=True,
+                can_send_voice_notes=True,
+            )
+            await bot.restrict_chat_member(
+                chat_id=chat_id,
+                user_id=user_id,
+                permissions=permissions,
+                use_independent_chat_permissions=True,
+            )
+            add_verified_user(user_id, tx_hash)
+            await reply_func(
+                "Payment verified! Your access has been activated.\n"
+                "You can now send messages in the group."
+            )
+            return True
+        except BadRequest as e:
+            last_error = str(e)
+
+    await reply_func(
+        "Payment verified, but we could not activate your group access. "
+        "Please ensure you have joined the group first and that the bot is admin. "
+        f"Last error: {last_error}"
+    )
+    return False
+
 async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
@@ -119,43 +181,8 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # For Apple Pay or other payment methods
     user_id = update.effective_user.id if update.effective_user else None
-    
-    group_id = os.getenv("GROUP_CHAT_ID")
-    if not group_id:
-        await query.message.reply_text("GROUP_CHAT_ID is not set in environment. Set it to enable group access.")
-        return
-
-    candidates = get_group_chat_id_candidates(group_id)
-    if not candidates:
-        await query.message.reply_text("GROUP_CHAT_ID is invalid. Use the numeric chat id of your private group.")
-        return
-
-    last_error = None
-    for chat_id in candidates:
-        try:
-            permissions = ChatPermissions(can_send_messages=True)
-            await context.bot.restrict_chat_member(
-                chat_id=chat_id,
-                user_id=user_id,
-                permissions=permissions
-            )
-            if user_id:
-                add_verified_user(user_id, "apple_pay")
-            await query.message.reply_text(
-                "Payment verified! Your access has been activated.\n"
-                "You can now send messages in the group."
-            )
-            return
-        except BadRequest as e:
-            last_error = str(e)
-
-    await query.message.reply_text(
-        "Payment verified, but we could not activate your group access. "
-        "Please ensure you have joined the group first. "
-        f"Error: {last_error}"
-    )
+    await grant_group_access(context.bot, user_id, "apple_pay", query.message.reply_text)
 
 def verify_usdt_transaction(tx_hash: str):
     if not ETHERSCAN_API_KEY:
@@ -232,30 +259,7 @@ async def verify_crypto_tx(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("GROUP_CHAT_ID is invalid. Use the numeric chat id of your private group.")
         return
 
-    last_error = None
-    for chat_id in candidates:
-        try:
-            permissions = ChatPermissions(can_send_messages=True)
-            await context.bot.restrict_chat_member(
-                chat_id=chat_id,
-                user_id=user_id,
-                permissions=permissions
-            )
-            if user_id:
-                add_verified_user(user_id, tx_hash)
-            await update.message.reply_text(
-                "Payment verified! Your access has been activated.\n"
-                "You can now send messages in the group."
-            )
-            return
-        except BadRequest as e:
-            last_error = str(e)
-
-    await update.message.reply_text(
-        "Payment verified, but we could not activate your group access. "
-        "Please ensure you have joined the group first. "
-        f"Error: {last_error}"
-    )
+    await grant_group_access(context.bot, user_id, tx_hash, update.message.reply_text)
 
 
 async def groupid(update: Update, context: ContextTypes.DEFAULT_TYPE):
