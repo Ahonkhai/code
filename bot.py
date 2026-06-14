@@ -180,7 +180,7 @@ async def restrict_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             await update.message.reply_text(
                 f"Welcome {member.full_name}! You are in spectator mode until payment is verified. "
-                "Send me /start in private chat to begin payment."
+                # "Send me /start in private chat to begin payment."
             )
         except BadRequest as e:
             print(f"restrict_new_member failed for {member.id} in chat {chat_id}: {e}")
