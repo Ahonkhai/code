@@ -3,10 +3,10 @@ import asyncio
 import os
 import json
 import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatPermissions
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatPermissions, LabeledPrice
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, PreCheckoutQueryHandler, ContextTypes, filters
 
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path=dotenv_path)
@@ -26,6 +26,7 @@ VERIFIED_USERS_FILE = os.path.join(os.path.dirname(__file__), "verified_users.js
 USDT_DECIMALS = 6
 USDT_REQUIRED_AMOUNT = 100
 USDT_CONTRACT_ADDRESS = os.getenv("USDT_CONTRACT_ADDRESS", "0xdAC17F958D2ee523a2206206994597C13D831ec7")
+PROVIDER_TOKEN = os.getenv("PROVIDER_TOKEN")
 
 def load_verified_users():
     try:
@@ -223,8 +224,37 @@ async def payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    user_id = update.effective_user.id if update.effective_user else None
-    await grant_group_access(context.bot, user_id, "apple_pay", query.message.reply_text)
+    if query.data == "pay_apple":
+        if not PROVIDER_TOKEN:
+            await query.message.reply_text(
+                "Payment provider token is not configured. "
+                "Set PROVIDER_TOKEN in your .env file and restart the bot."
+            )
+            return
+
+        chat_id = update.effective_chat.id
+        title = "Premium Entry Pass (Card)"
+        description = "Unlocks premium group access and the complete Bundler bot suite."
+        payload = f"premium_access_card_{chat_id}"
+        currency = "EUR"
+        price = 10000  # 100 EUR in cents
+        prices = [LabeledPrice("One-Time Entry Fee", price)]
+
+        try:
+            await context.bot.send_invoice(
+                chat_id=chat_id,
+                title=title,
+                description=description,
+                payload=payload,
+                provider_token=PROVIDER_TOKEN,
+                currency=currency,
+                prices=prices,
+                start_parameter="pay-entry"
+            )
+        except Exception as e:
+            print(f"Card invoice error: {e}")
+            await query.message.reply_text("Unable to generate card invoice window.")
+        return
 
 def verify_usdt_transaction(tx_hash: str):
     if not ETHERSCAN_API_KEY:
@@ -315,6 +345,32 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.text:
         await update.message.reply_text(update.message.text)
 
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.pre_checkout_query
+    if query.invoice_payload.startswith("premium_access_card_"):
+        await query.answer(ok=True)
+    else:
+        await query.answer(ok=False, error_message="Something went wrong...")
+
+async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else None
+    payment_info = update.message.successful_payment
+    print(f"Success! User {user_id} successfully authorized payment for {payment_info.total_amount / 100} EUR.")
+
+    await update.message.reply_text("Payment verified! Finalizing your group access...")
+
+    group_id = os.getenv("GROUP_CHAT_ID")
+    if not group_id:
+        await update.message.reply_text("GROUP_CHAT_ID is not set in environment. Set it to enable access.")
+        return
+
+    candidates = get_group_chat_id_candidates(group_id)
+    if not candidates:
+        await update.message.reply_text("GROUP_CHAT_ID is invalid. Use the numeric chat id of your private group.")
+        return
+
+    await grant_group_access(context.bot, user_id, payment_info.telegram_payment_charge_id, update.message.reply_text)
+
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     print(f"Loaded CRYPTO_ADDRESS={CRYPTO_ADDRESS} CRYPTO_NETWORK={CRYPTO_NETWORK}")
@@ -330,6 +386,8 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, send_welcome_payment))
     # handle payment button callbacks
     app.add_handler(CallbackQueryHandler(payment_callback, pattern=r"^pay_"))
+    app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
     app.run_polling()
 
 if __name__ == "__main__":
