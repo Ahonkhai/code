@@ -163,6 +163,19 @@ def make_image(w: int, h: int, fmt: str = "PNG") -> bytes:
     return buf.getvalue()
 
 
+class SocialTests(unittest.TestCase):
+    def test_normalize(self):
+        n = launch.normalize_social
+        self.assertEqual(n("twitter", "@piu"), "https://x.com/piu")
+        self.assertEqual(n("twitter", "twitter.com/piu"), "https://twitter.com/piu")
+        self.assertEqual(n("telegram", "https://t.me/piu"), "https://t.me/piu")
+        self.assertEqual(n("instagram", "@piu.sol"), "https://instagram.com/piu.sol")
+        self.assertEqual(n("website", "piu.io"), "https://piu.io")
+        for key, bad in (("twitter", "https://t.me/x"), ("telegram", "t.me"), ("website", "not a site"), ("instagram", "@bad handle!")):
+            with self.assertRaises(ValueError):
+                n(key, bad)
+
+
 class ImageCheckTests(unittest.TestCase):
     def test_accepts_square_png_and_jpg(self):
         self.assertEqual(launch.check_image(make_image(512, 512)), "png")
@@ -228,7 +241,19 @@ class FlowTests(TraderTestCase):
         self.assertIn("needs about", self.replies[-1])
         self.chain.balances[w.pubkey] = 30 * 10**9
         await launch.dev_buy_button(text_update("x"), self.ctx, "25")
+        self.assertIn("Add socials (optional): choose a platform or skip.", self.replies[-1])
+
+        await launch.ask_social(text_update("x"), self.ctx, "twitter")
+        await main.on_text(text_update("https://t.me/wrong"), self.ctx)
+        self.assertIn("valid X link", self.replies[-1])
+        await main.on_text(text_update("@mtk"), self.ctx)
+        self.assertIn("✅ X set", self.replies[-1])
+        await launch.ask_social(text_update("x"), self.ctx, "website")
+        await main.on_text(text_update("mtk.io"), self.ctx)
+        await launch.finish_socials(text_update("x"), self.ctx, skip=False)
         self.assertIn("Trade size: 25 SOL", self.replies[-1])
+        self.assertIn("X: https://x.com/mtk", self.replies[-1])
+        self.assertIn("Website: https://mtk.io", self.replies[-1])
 
         await launch.confirm(text_update("x"), self.ctx)
         [payload] = self.chain.pumpportal

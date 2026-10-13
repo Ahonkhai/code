@@ -21,6 +21,8 @@ class TokenMeta:
     twitter: str = ""
     telegram: str = ""
     website: str = ""
+    # pump.fun has no Instagram field; it is sent along and may not be shown.
+    instagram: str = ""
 
 
 class PumpClient:
@@ -35,6 +37,7 @@ class PumpClient:
             "twitter": meta.twitter,
             "telegram": meta.telegram,
             "website": meta.website,
+            "instagram": meta.instagram,
             "showName": "true",
         }
         resp = await self.http.post(

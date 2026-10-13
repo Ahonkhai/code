@@ -51,7 +51,7 @@ Make sure the bot is added to the private group and is an admin with invite-link
 
 A Solana / pump.fun bot with a button menu: **🚀 Launch · 🔑 Wallets · 📁 Portfolio · 🧾 Tx tracker · 🛡 Settings**.
 
-- **Launch**: step-by-step token creation (name 1-32, symbol 2-10 A-Z, description, square PNG/JPG image, then a trade size of 5/10/15/25 SOL bought at launch by the creator's wallet), with "Latest" and "Hot" tokens shown as inspiration on the name step.
+- **Launch**: step-by-step token creation (name 1-32, symbol 2-10 A-Z, description, square PNG/JPG image, a trade size of 5/10/15/25 SOL bought at launch by the creator's wallet, then optional X / Telegram / Website / Instagram links), with "Latest" and "Hot" tokens shown as inspiration on the name step.
 - **Wallets**: create / import / export / withdraw / remove. Secret keys are encrypted with `WALLET_ENCRYPTION_KEY` before being saved, and imported key messages are deleted from the chat.
 - **Trading**: paste any token address for a token card with price, market cap, safety checks (mint/freeze authority, top holders), and Buy / Sell buttons.
 - **Portfolio**: SOL and token balances across all wallets with USD values (Jupiter prices).

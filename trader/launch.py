@@ -26,6 +26,16 @@ LAUNCH_OVERHEAD_SOL = 0.03
 
 NAME_PROMPT = "📝 <b>Token name</b> (1-{max})\nTip: Latest, Hot Tokens."
 SYMBOL_PROMPT = f"🔤 Enter <b>SYMBOL</b> ({SYMBOL_MIN}-{SYMBOL_MAX}, A-Z)\nExample: $PEPE"
+SOCIALS_PROMPT = "🔗 Add socials (optional): choose a platform or skip."
+# key: (icon, label, example)
+SOCIALS = {
+    "twitter": ("🐦", "X", "https://x.com/yourtoken or @yourtoken"),
+    "telegram": ("📱", "Telegram", "https://t.me/yourtoken or @yourtoken"),
+    "website": ("🌐", "Website", "https://yourtoken.com"),
+    "instagram": ("📸", "Instagram", "https://instagram.com/yourtoken or @yourtoken"),
+}
+HANDLE_RE = re.compile(r"^[A-Za-z0-9_.]{1,64}$")
+URL_RE = re.compile(r"^https?://[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:\d+)?(/\S*)?$")
 # SOL bought by the creator wallet in the launch transaction.
 TRADE_SIZES = (5, 10, 15, 25)
 TRADE_SIZE_PROMPT = "💰 <b>Choose trade size</b>\nSOL your wallet buys at launch. Tap a size or type an amount."
@@ -181,15 +191,97 @@ async def _set_dev_buy(update: Update, context: ContextTypes.DEFAULT_TYPE, amoun
         )
         return
     data["dev_buy"] = amount
+    data.setdefault("socials", {})
+    await show_socials(update, context)
+
+
+def _socials_kb(socials: dict) -> InlineKeyboardMarkup:
+    def btn(key: str) -> Btn:
+        icon, label, _ = SOCIALS[key]
+        return Btn(f"{'✅' if socials.get(key) else icon} {label}", callback_data=f"l:soc:{key}")
+
+    return cancel_kb(
+        [btn("twitter"), btn("telegram")],
+        [btn("website"), btn("instagram")],
+        [Btn("✅ Done", callback_data="l:socdone"), Btn("⏭ Skip", callback_data="l:socskip")],
+    )
+
+
+async def show_socials(update: Update, context: ContextTypes.DEFAULT_TYPE, note: str = "") -> None:
     set_awaiting(context, None)
+    socials = (context.user_data.get("launch") or {}).get("socials", {})
+    added = "".join(f"\n{SOCIALS[k][0]} {esc(v)}" for k, v in socials.items())
+    await reply(update, f"{note}{SOCIALS_PROMPT}{added}", _socials_kb(socials))
+
+
+async def ask_social(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str) -> None:
+    if key not in SOCIALS:
+        return
+    set_awaiting(context, "launch_social", platform=key)
+    icon, label, example = SOCIALS[key]
+    await reply(update, f"{icon} Send your {label} link or @handle\nExample: {example}", cancel_kb())
+
+
+def normalize_social(key: str, text: str) -> str:
+    """Turn a link or @handle into a full https URL; raises ValueError if it doesn't fit the platform."""
+    text = text.strip()
+    if " " in text or not text:
+        raise ValueError("Send a single link or @handle.")
+    hosts = {"twitter": ("x.com", "twitter.com"), "telegram": ("t.me", "telegram.me"), "instagram": ("instagram.com",)}
+    if key in hosts:
+        if text.startswith("@"):
+            if not HANDLE_RE.match(text[1:]):
+                raise ValueError("That handle has invalid characters.")
+            return f"https://{hosts[key][0]}/{text[1:]}"
+        url = text if "://" in text else f"https://{text}"
+        host = url.split("://", 1)[1].split("/", 1)[0].lower().removeprefix("www.")
+        if host not in hosts[key] or "/" not in url.split("://", 1)[1]:
+            raise ValueError(f"That isn't a valid {SOCIALS[key][1]} link.")
+        return url
+    url = text if "://" in text else f"https://{text}"
+    if not URL_RE.match(url):
+        raise ValueError("That isn't a valid website link.")
+    return url
+
+
+async def receive_social(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, state: dict) -> None:
+    key = state["platform"]
+    try:
+        url = normalize_social(key, text)
+    except ValueError as e:
+        await reply(update, f"❌ {esc(e)} Try again or tap Cancel.", cancel_kb())
+        return
+    context.user_data.setdefault("launch", {}).setdefault("socials", {})[key] = url
+    await show_socials(update, context, note=f"✅ {SOCIALS[key][1]} set\n\n")
+
+
+async def finish_socials(update: Update, context: ContextTypes.DEFAULT_TYPE, skip: bool) -> None:
+    data = context.user_data.get("launch") or {}
+    if "dev_buy" not in data:
+        await reply(update, "That launch expired. Start again from the menu.", InlineKeyboardMarkup([[CANCEL_BTN]]))
+        return
+    if skip:
+        data["socials"] = {}
+    await _show_confirm(update, context)
+
+
+async def _show_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    set_awaiting(context, None)
+    data = context.user_data["launch"]
+    wallet = await require_wallet(update, context)
+    if not wallet:
+        return
+    settings = svc(context).db.get_settings(update.effective_user.id)
+    socials = "".join(f"{SOCIALS[k][1]}: {esc(v)}\n" for k, v in data.get("socials", {}).items())
     text = (
         "🚀 <b>Confirm launch</b>\n\n"
         f"Name: <b>{esc(data['name'])}</b>\n"
         f"Symbol: <b>${esc(data['symbol'])}</b>\n"
         f"Description: {esc(data.get('description') or '—')}\n"
+        f"{socials}"
         f"Platform: pump.fun\n"
         f"Creator wallet: {esc(wallet.label)} ({short(wallet.pubkey)})\n"
-        f"Trade size: {amount:g} SOL\n"
+        f"Trade size: {data['dev_buy']:g} SOL\n"
         f"Slippage: {settings.slippage}% · Priority fee: {settings.priority_fee} SOL"
     )
     await reply(update, text, cancel_kb([Btn("✅ Launch", callback_data="l:confirm")]))
@@ -213,6 +305,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         name=data["name"],
         symbol=data["symbol"],
         description=data.get("description", ""),
+        **data.get("socials", {}),
     )
     await reply(update, "⏳ Uploading metadata and building the launch transaction…")
     try:

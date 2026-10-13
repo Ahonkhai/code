@@ -78,6 +78,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await launch.show_trending(update, context, action)
         elif action == "dev":
             await launch.dev_buy_button(update, context, args[0])
+        elif action == "soc":
+            await launch.ask_social(update, context, args[0])
+        elif action in ("socdone", "socskip"):
+            await launch.finish_socials(update, context, skip=action == "socskip")
         elif action == "confirm":
             await query.edit_message_reply_markup(None)
             await launch.confirm(update, context)
@@ -128,6 +132,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await wallets.receive_withdraw_address(update, context, text, state)
     elif kind == "withdraw_amount":
         await wallets.receive_withdraw_amount(update, context, text, state)
+    elif kind == "launch_social":
+        await launch.receive_social(update, context, text, state)
     elif kind and kind.startswith("launch_"):
         await launch.receive_text(update, context, kind, text)
     elif kind == "buy_amount":
