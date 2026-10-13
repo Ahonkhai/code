@@ -174,10 +174,18 @@ class FlowTests(TraderTestCase):
 
         await launch.start(text_update("x"), self.ctx)
         self.assertIn("Token name", self.replies[-1])
-        await main.on_text(text_update("x" * 51), self.ctx)
-        self.assertIn("1-50", self.replies[-1])
-        for text in ("My Token", "$mtk", "A test token"):
-            await main.on_text(text_update(text), self.ctx)
+        await main.on_text(text_update("x" * 33), self.ctx)
+        self.assertIn("1-32", self.replies[-1])
+        await main.on_text(text_update("My Token"), self.ctx)
+        self.assertIn("Name set: My Token", self.replies[-1])
+        self.assertIn("Enter <b>SYMBOL</b> (2-10, A-Z)", self.replies[-1])
+        for bad in ("M", "MT1", "TOOLONGSYMBOL"):
+            await main.on_text(text_update(bad), self.ctx)
+            self.assertIn("letters A-Z", self.replies[-1])
+        await main.on_text(text_update("$mtk"), self.ctx)
+        self.assertIn("Symbol set: $MTK", self.replies[-1])
+        self.assertIn("1-2 lines. Avoid links.", self.replies[-1])
+        await main.on_text(text_update("A test token"), self.ctx)
         self.assertEqual(self.ctx.user_data["launch"]["symbol"], "MTK")
 
         # image step: simulate a received image

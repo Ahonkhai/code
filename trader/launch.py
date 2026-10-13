@@ -1,3 +1,5 @@
+import re
+
 from solders.keypair import Keypair
 from telegram import InlineKeyboardButton as Btn, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
@@ -7,14 +9,18 @@ from . import config
 from .pump import TokenMeta
 from .solana_rpc import sign_versioned
 
-NAME_MAX = 50
-SYMBOL_MAX = 10
+# On-chain token metadata caps name at 32 and symbol at 10 bytes; longer values fail the launch tx.
+NAME_MAX = 32
+SYMBOL_MIN, SYMBOL_MAX = 2, 10
+SYMBOL_RE = re.compile(rf"^[A-Z]{{{SYMBOL_MIN},{SYMBOL_MAX}}}$")
 DESC_MAX = 500
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 # Rough SOL needed on top of the dev buy: mint/metadata rent plus fees.
 LAUNCH_OVERHEAD_SOL = 0.03
 
 NAME_PROMPT = "📝 <b>Token name</b> (1-{max})\nTip: Latest, Hot Tokens."
+SYMBOL_PROMPT = f"🔤 Enter <b>SYMBOL</b> ({SYMBOL_MIN}-{SYMBOL_MAX}, A-Z)\nExample: $PEPE"
+DESC_PROMPT = f"📝 Send the exact description of the token (≤ {DESC_MAX} chars)\n1-2 lines. Avoid links."
 
 
 def _name_kb() -> InlineKeyboardMarkup:
@@ -59,20 +65,20 @@ async def receive_text(update: Update, context: ContextTypes.DEFAULT_TYPE, kind:
             return
         data["name"] = text
         set_awaiting(context, "launch_symbol")
-        await reply(update, f"🔤 <b>Ticker / symbol</b> (1-{SYMBOL_MAX}), e.g. <code>PEPE</code>", cancel_kb())
+        await reply(update, f"✅ Name set: {esc(text)}\n\n{SYMBOL_PROMPT}", cancel_kb())
 
     elif kind == "launch_symbol":
         symbol = text.lstrip("$").upper()
-        if not 1 <= len(symbol) <= SYMBOL_MAX or " " in symbol:
-            await reply(update, f"❌ Symbol must be 1-{SYMBOL_MAX} characters, no spaces.", cancel_kb())
+        if not SYMBOL_RE.match(symbol):
+            await reply(update, f"❌ Symbol must be {SYMBOL_MIN}-{SYMBOL_MAX} letters A-Z.\n\n{SYMBOL_PROMPT}", cancel_kb())
             return
         data["symbol"] = symbol
         set_awaiting(context, "launch_desc")
-        await reply(update, f"🗒 <b>Description</b> (up to {DESC_MAX} characters)", _skip_kb("desc"))
+        await reply(update, f"✅ Symbol set: ${symbol}\n\n{DESC_PROMPT}", cancel_kb())
 
     elif kind == "launch_desc":
-        if len(text) > DESC_MAX:
-            await reply(update, f"❌ Keep it under {DESC_MAX} characters.", _skip_kb("desc"))
+        if not 1 <= len(text) <= DESC_MAX:
+            await reply(update, f"❌ Description must be 1-{DESC_MAX} characters.\n\n{DESC_PROMPT}", cancel_kb())
             return
         data["description"] = text
         await _ask_image(update, context)
@@ -103,10 +109,7 @@ async def receive_text(update: Update, context: ContextTypes.DEFAULT_TYPE, kind:
 
 
 async def skip(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str) -> None:
-    if step == "desc":
-        context.user_data.setdefault("launch", {})["description"] = ""
-        await _ask_image(update, context)
-    elif step == "socials":
+    if step == "socials":
         await _ask_dev_buy(update, context)
 
 
