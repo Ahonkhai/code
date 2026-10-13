@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import os
 import tempfile
@@ -8,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 from cryptography.fernet import Fernet
+from PIL import Image
 from solders.hash import Hash
 from solders.instruction import AccountMeta, Instruction
 from solders.keypair import Keypair
@@ -155,6 +157,28 @@ class KeystoreTests(unittest.TestCase):
         self.assertTrue(all(signed.verify_with_results()))
 
 
+def make_image(w: int, h: int, fmt: str = "PNG") -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (w, h)).save(buf, fmt)
+    return buf.getvalue()
+
+
+class ImageCheckTests(unittest.TestCase):
+    def test_accepts_square_png_and_jpg(self):
+        self.assertEqual(launch.check_image(make_image(512, 512)), "png")
+        self.assertEqual(launch.check_image(make_image(1000, 1000, "JPEG")), "jpg")
+
+    def test_rejects_bad_images(self):
+        for raw, reason in (
+            (make_image(800, 600), "square"),
+            (make_image(256, 256), "at least 512px"),
+            (make_image(600, 600, "GIF"), "PNG or JPG"),
+            (b"not an image", "readable"),
+        ):
+            with self.assertRaisesRegex(ValueError, reason):
+                launch.check_image(raw)
+
+
 class FlowTests(TraderTestCase):
     async def test_import_wallet_deletes_key_message(self):
         kp = Keypair()
@@ -186,6 +210,7 @@ class FlowTests(TraderTestCase):
         self.assertIn("Symbol set: $MTK", self.replies[-1])
         self.assertIn("1-2 lines. Avoid links.", self.replies[-1])
         await main.on_text(text_update("A test token"), self.ctx)
+        self.assertIn("Upload token image</b>\nPNG/JPG · Square · ≥512px", self.replies[-1])
         self.assertEqual(self.ctx.user_data["launch"]["symbol"], "MTK")
 
         # image step: simulate a received image

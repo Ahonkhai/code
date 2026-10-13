@@ -1,5 +1,7 @@
+import io
 import re
 
+from PIL import Image, UnidentifiedImageError
 from solders.keypair import Keypair
 from telegram import InlineKeyboardButton as Btn, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
@@ -15,11 +17,16 @@ SYMBOL_MIN, SYMBOL_MAX = 2, 10
 SYMBOL_RE = re.compile(rf"^[A-Z]{{{SYMBOL_MIN},{SYMBOL_MAX}}}$")
 DESC_MAX = 500
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MIN_IMAGE_PX = 512
+# Width/height may differ by this fraction and still count as square.
+SQUARE_TOLERANCE = 0.01
+IMAGE_FORMATS = {"PNG": "png", "JPEG": "jpg"}
 # Rough SOL needed on top of the dev buy: mint/metadata rent plus fees.
 LAUNCH_OVERHEAD_SOL = 0.03
 
 NAME_PROMPT = "📝 <b>Token name</b> (1-{max})\nTip: Latest, Hot Tokens."
 SYMBOL_PROMPT = f"🔤 Enter <b>SYMBOL</b> ({SYMBOL_MIN}-{SYMBOL_MAX}, A-Z)\nExample: $PEPE"
+IMAGE_PROMPT = f"📷 <b>Upload token image</b>\nPNG/JPG · Square · ≥{MIN_IMAGE_PX}px"
 DESC_PROMPT = f"📝 Send the exact description of the token (≤ {DESC_MAX} chars)\n1-2 lines. Avoid links."
 
 
@@ -84,7 +91,7 @@ async def receive_text(update: Update, context: ContextTypes.DEFAULT_TYPE, kind:
         await _ask_image(update, context)
 
     elif kind == "launch_image":
-        await reply(update, "🖼 Please send an image (as a photo or file).", cancel_kb())
+        await reply(update, IMAGE_PROMPT, cancel_kb())
 
     elif kind == "launch_socials":
         for link in text.split():
@@ -115,25 +122,47 @@ async def skip(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str) ->
 
 async def _ask_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     set_awaiting(context, "launch_image")
-    await reply(update, "🖼 <b>Token image</b>: send a square image (PNG/JPG/GIF, max 5 MB).", cancel_kb())
+    await reply(update, IMAGE_PROMPT, cancel_kb())
+
+
+def check_image(raw: bytes) -> str:
+    """Validate a token image and return its file extension; raises ValueError with a user-facing reason."""
+    try:
+        with Image.open(io.BytesIO(raw)) as img:
+            fmt, (w, h) = img.format, img.size
+    except (UnidentifiedImageError, OSError):
+        raise ValueError("That file isn't a readable image.")
+    if fmt not in IMAGE_FORMATS:
+        raise ValueError(f"Image must be PNG or JPG (got {fmt}).")
+    if abs(w - h) > SQUARE_TOLERANCE * max(w, h):
+        raise ValueError(f"Image must be square (got {w}×{h}px).")
+    if min(w, h) < MIN_IMAGE_PX:
+        raise ValueError(f"Image must be at least {MIN_IMAGE_PX}px (got {w}×{h}px).")
+    return IMAGE_FORMATS[fmt]
 
 
 async def receive_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     if msg.photo:
-        tg_file, filename = msg.photo[-1], "image.jpg"
+        tg_file = msg.photo[-1]
     elif msg.document and (msg.document.mime_type or "").startswith("image/"):
-        tg_file, filename = msg.document, msg.document.file_name or "image.png"
+        tg_file = msg.document
     else:
-        await reply(update, "🖼 That isn't an image. Send a photo or an image file.", cancel_kb())
+        await reply(update, f"❌ That isn't an image.\n\n{IMAGE_PROMPT}", cancel_kb())
         return
     if tg_file.file_size and tg_file.file_size > MAX_IMAGE_BYTES:
-        await reply(update, "❌ Image is over 5 MB.", cancel_kb())
+        await reply(update, f"❌ Image is over 5 MB.\n\n{IMAGE_PROMPT}", cancel_kb())
         return
     file = await tg_file.get_file()
+    raw = bytes(await file.download_as_bytearray())
+    try:
+        ext = check_image(raw)
+    except ValueError as e:
+        await reply(update, f"❌ {esc(e)}\n\n{IMAGE_PROMPT}", cancel_kb())
+        return
     data = context.user_data.setdefault("launch", {})
-    data["image"] = bytes(await file.download_as_bytearray())
-    data["image_name"] = filename
+    data["image"] = raw
+    data["image_name"] = f"image.{ext}"
     set_awaiting(context, "launch_socials")
     await reply(
         update,
