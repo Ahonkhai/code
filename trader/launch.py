@@ -4,6 +4,7 @@ import re
 from PIL import Image, UnidentifiedImageError
 from solders.keypair import Keypair
 from telegram import InlineKeyboardButton as Btn, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from .common import CANCEL_BTN, cancel_kb, esc, fmt_num, reply, require_wallet, set_awaiting, short, submit, svc
@@ -271,20 +272,22 @@ async def _show_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     wallet = await require_wallet(update, context)
     if not wallet:
         return
-    settings = svc(context).db.get_settings(update.effective_user.id)
-    socials = "".join(f"{SOCIALS[k][1]}: {esc(v)}\n" for k, v in data.get("socials", {}).items())
-    text = (
-        "🚀 <b>Confirm launch</b>\n\n"
-        f"Name: <b>{esc(data['name'])}</b>\n"
-        f"Symbol: <b>${esc(data['symbol'])}</b>\n"
-        f"Description: {esc(data.get('description') or '—')}\n"
-        f"{socials}"
-        f"Platform: pump.fun\n"
-        f"Creator wallet: {esc(wallet.label)} ({short(wallet.pubkey)})\n"
-        f"Trade size: {data['dev_buy']:g} SOL\n"
-        f"Slippage: {settings.slippage}% · Priority fee: {settings.priority_fee} SOL"
+    socials = ", ".join(f"{SOCIALS[k][1]} {esc(v)}" for k, v in data.get("socials", {}).items()) or "—"
+    caption = (
+        "<b>Review</b>\n\n"
+        f"📝 Name: {esc(data['name'])}\n"
+        f"🔤 Symbol: ${esc(data['symbol'])}\n"
+        f"💰 Trade size: {data['dev_buy']:g} SOL\n"
+        f"📄 Description: {esc(data.get('description') or '—')}\n"
+        f"🔗 Socials: {socials}\n"
+        f"🔑 Wallet: {esc(wallet.label)} ({short(wallet.pubkey)})"
     )
-    await reply(update, text, cancel_kb([Btn("✅ Launch", callback_data="l:confirm")]))
+    await update.effective_chat.send_photo(
+        data["image"],
+        caption=caption,
+        parse_mode=ParseMode.HTML,
+        reply_markup=cancel_kb([Btn("✅ Confirm & Save", callback_data="l:confirm")]),
+    )
 
 
 async def dev_buy_button(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: str) -> None:

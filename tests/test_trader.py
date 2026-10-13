@@ -96,7 +96,7 @@ def text_update(text: str, user_id: int = 42):
         message=message,
         callback_query=None,
         effective_user=SimpleNamespace(id=user_id),
-        effective_chat=SimpleNamespace(id=user_id, send_message=AsyncMock()),
+        effective_chat=SimpleNamespace(id=user_id, send_message=AsyncMock(), send_photo=AsyncMock()),
     )
 
 
@@ -250,10 +250,19 @@ class FlowTests(TraderTestCase):
         self.assertIn("✅ X set", self.replies[-1])
         await launch.ask_social(text_update("x"), self.ctx, "website")
         await main.on_text(text_update("mtk.io"), self.ctx)
-        await launch.finish_socials(text_update("x"), self.ctx, skip=False)
-        self.assertIn("Trade size: 25 SOL", self.replies[-1])
-        self.assertIn("X: https://x.com/mtk", self.replies[-1])
-        self.assertIn("Website: https://mtk.io", self.replies[-1])
+        upd = text_update("x")
+        await launch.finish_socials(upd, self.ctx, skip=False)
+        photo, = upd.effective_chat.send_photo.await_args.args
+        caption = upd.effective_chat.send_photo.await_args.kwargs["caption"]
+        self.assertEqual(photo, make_image(512, 512))
+        self.assertTrue(caption.startswith("<b>Review</b>"))
+        self.assertIn("📝 Name: My Token", caption)
+        self.assertIn("💰 Trade size: 25 SOL", caption)
+        self.assertIn("🔗 Socials: X https://x.com/mtk, Website https://mtk.io", caption)
+
+        upd = text_update("x")
+        await launch.finish_socials(upd, self.ctx, skip=True)
+        self.assertIn("🔗 Socials: —", upd.effective_chat.send_photo.await_args.kwargs["caption"])
 
         await launch.confirm(text_update("x"), self.ctx)
         [payload] = self.chain.pumpportal
