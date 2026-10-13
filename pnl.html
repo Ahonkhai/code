@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PnL Card (Test)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Anton&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0d0e;
+    --card: #131617;
+    --inner: #16191b;
+    --border: #2a2e30;
+    --text: #ffffff;
+    --muted: #8a8f93;
+    --test: #e5484d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 0 16px 40px;
+  }
+  .wrap { width: 100%; max-width: 460px; }
+
+  .test-banner {
+    position: sticky; top: 0; z-index: 5;
+    margin: 0 -16px 0;
+    background: var(--test);
+    color: #fff;
+    text-align: center;
+    font-size: 12px; font-weight: 700; letter-spacing: .18em;
+    padding: 6px 0;
+  }
+
+  .logo {
+    width: 108px; height: 108px; margin: 24px auto 0;
+    background: #000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: "Anton", Impact, sans-serif; line-height: .95; text-transform: uppercase;
+  }
+  .logo .l1 { font-size: 40px; }
+  .logo .l2 { font-size: 18px; }
+
+  .hero { text-align: center; margin-top: 18px; }
+  .amount { font-size: 44px; font-weight: 800; letter-spacing: -.01em; }
+  .amount .unit { font-size: 22px; font-weight: 600; vertical-align: 16px; margin-left: 6px; }
+  .mult {
+    display: inline-block; margin-top: 14px;
+    padding: 8px 16px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--border);
+    font-weight: 600; font-size: 16px;
+  }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 26px 0 28px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 26px; padding: 22px; margin-bottom: 18px;
+  }
+  .card.flat { padding: 36px 36px; }
+  .row { display: flex; justify-content: space-between; align-items: center; }
+  .row + .row { margin-top: 18px; }
+  .label { font-size: 12px; letter-spacing: .3em; color: var(--muted); text-transform: uppercase; }
+  .val { font-weight: 600; font-size: 16px; }
+
+  .box {
+    background: var(--inner); border: 1px solid var(--border);
+    border-radius: 22px; padding: 22px 16px;
+  }
+  .box + .box { margin-top: 18px; }
+  .box .label { display: block; margin-bottom: 8px; }
+  .box .big { font-size: 22px; font-weight: 500; }
+  .box .item + .item { margin-top: 14px; }
+  .box .item .val { font-size: 18px; font-weight: 700; }
+
+  .btn {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 12px;
+    background: var(--inner); color: var(--text);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 13px; font: 600 17px "Inter", sans-serif; cursor: pointer;
+  }
+  .btn svg { width: 20px; height: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="test-banner">SAMPLE DATA · TEST ONLY</div>
+
+  <div class="logo"><span class="l1" id="logo1">TEST</span><span class="l2" id="logo2">PNL</span></div>
+
+  <div class="hero">
+    <div class="amount"><span id="amount">+0.00</span><span class="unit">SOL</span></div>
+    <div class="mult" id="mult">0.00X</div>
+  </div>
+
+  <hr>
+
+  <div class="card flat">
+    <div class="row"><span class="label">Invested</span><span class="val" id="invested">0 SOL</span></div>
+    <div class="row"><span class="label">Profit</span><span class="val" id="profit">0 SOL</span></div>
+  </div>
+
+  <div class="card">
+    <div class="box">
+      <span class="label">Mode</span>
+      <div class="big" id="mode">-</div>
+    </div>
+    <div class="box">
+      <div class="item"><span class="label">Token</span><div class="val" id="token">-</div></div>
+      <div class="item"><span class="label">Scope</span><div class="val" id="scope">-</div></div>
+      <div class="item"><span class="label">PnL ID</span><div class="val" id="pid">-</div></div>
+      <div class="item"><span class="label">Domain</span><div class="val" id="domain">-</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <button class="btn" id="copy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span id="copyLabel">Copy PnL Link</span>
+    </button>
+  </div>
+</div>
+
+<script>
+  // Query params: invested, profit, mode, token, scope, id, domain, mult (optional override)
+  const p = new URLSearchParams(location.search);
+  const num = (k, d) => { const v = parseFloat(p.get(k)); return isNaN(v) ? d : v; };
+  const fmt = n => (Math.round(n * 100) / 100).toString();
+
+  const invested = num("invested", 9);
+  const profit = num("profit", 8.28);
+  const mult = p.has("mult") ? num("mult", 0) : (invested ? profit / invested : 0);
+
+  const set = (id, v) => document.getElementById(id).textContent = v;
+  set("amount", (profit >= 0 ? "+" : "") + profit.toFixed(2));
+  set("mult", mult.toFixed(2) + "X");
+  set("invested", fmt(invested) + " SOL");
+  set("profit", fmt(profit) + " SOL");
+  set("mode", p.get("mode") || "Test Mode");
+  set("token", p.get("token") || "$TEST");
+  set("scope", p.get("scope") || "All Wallets");
+  set("pid", p.get("id") || "demo");
+  set("domain", p.get("domain") || "localhost");
+
+  document.getElementById("copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(location.href); set("copyLabel", "Copied!"); }
+    catch { set("copyLabel", "Copy failed"); }
+    setTimeout(() => set("copyLabel", "Copy PnL Link"), 1500);
+  });
+</script>
+</body>
+</html>
