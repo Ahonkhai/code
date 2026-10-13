@@ -44,3 +44,34 @@ Verification flow
 - The bot checks the transaction automatically and issues a single-use invite link if the payment is valid.
 
 Make sure the bot is added to the private group and is an admin with invite-link permission.
+
+---
+
+# Launch & trading bot (`trader/`)
+
+A Solana / pump.fun bot with a button menu: **🚀 Launch · 🔑 Wallets · 📁 Portfolio · 🧾 Tx tracker · 🛡 Settings**.
+
+- **Launch**: step-by-step token creation (name 1-50, symbol, description, image, links, optional dev buy from one wallet), with "Latest" and "Hot" tokens shown as inspiration on the name step.
+- **Wallets**: create / import / export / withdraw / remove. Secret keys are encrypted with `WALLET_ENCRYPTION_KEY` before being saved, and imported key messages are deleted from the chat.
+- **Trading**: paste any token address for a token card with price, market cap, safety checks (mint/freeze authority, top holders), and Buy / Sell buttons.
+- **Portfolio**: SOL and token balances across all wallets with USD values (Jupiter prices).
+- **Tx tracker**: every transaction is watched and you get a ✅ / ❌ / ⌛ message when it lands, fails or is dropped.
+- **Sniper protection**: per-user max slippage (trades fail rather than get sniped or sandwiched) and priority fee.
+
+Transactions are built by [PumpPortal's local API](https://pumpportal.fun/local-trading-api/trading-api) and signed inside the bot, so keys never leave it. PumpPortal charges a small fee per trade; check their current pricing.
+
+## Run
+
+```bash
+pip install -r requirements.txt
+# add the variables from .env.example to .env
+python -m trader
+```
+
+Docker: same image, with `CMD ["python", "-m", "trader"]`.
+
+## Notes
+
+- `trader.db` holds the encrypted wallets. Back up both it **and** `WALLET_ENCRYPTION_KEY`; losing either loses access to the wallets.
+- The Latest/Hot feed uses pump.fun's unofficial frontend API (`PUMP_COINS_URL`), which can change without notice.
+- Tests: `python -m pytest tests/test_trader.py` (fully offline; RPC and APIs are mocked).
