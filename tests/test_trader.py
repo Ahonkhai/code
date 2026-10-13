@@ -213,22 +213,27 @@ class FlowTests(TraderTestCase):
         self.assertIn("Upload token image</b>\nPNG/JPG · Square · ≥512px", self.replies[-1])
         self.assertEqual(self.ctx.user_data["launch"]["symbol"], "MTK")
 
-        # image step: simulate a received image
-        self.ctx.user_data["launch"].update(image=b"img", image_name="a.png")
-        common.set_awaiting(self.ctx, "launch_socials")
-        await main.on_text(text_update("https://x.com/mtk https://t.me/mtk https://mtk.io"), self.ctx)
-        data = self.ctx.user_data["launch"]
-        self.assertEqual((data["twitter"], data["telegram"], data["website"]), ("https://x.com/mtk", "https://t.me/mtk", "https://mtk.io"))
+        # image step: simulate a received photo
+        tg_file = SimpleNamespace(
+            file_size=1000,
+            get_file=AsyncMock(return_value=SimpleNamespace(download_as_bytearray=AsyncMock(return_value=bytearray(make_image(512, 512))))),
+        )
+        upd = text_update("")
+        upd.message.photo = [tg_file]
+        await main.on_media(upd, self.ctx)
+        self.assertEqual(self.ctx.user_data["launch"]["image_name"], "image.png")
+        self.assertIn("Choose trade size", self.replies[-1])
 
-        await main.on_text(text_update("5"), self.ctx)  # more than the wallet holds
+        await launch.dev_buy_button(text_update("x"), self.ctx, "5")  # more than the wallet holds
         self.assertIn("needs about", self.replies[-1])
-        await main.on_text(text_update("0.5"), self.ctx)
-        self.assertIn("Confirm launch", self.replies[-1])
+        self.chain.balances[w.pubkey] = 30 * 10**9
+        await launch.dev_buy_button(text_update("x"), self.ctx, "25")
+        self.assertIn("Trade size: 25 SOL", self.replies[-1])
 
         await launch.confirm(text_update("x"), self.ctx)
         [payload] = self.chain.pumpportal
         self.assertEqual(payload["action"], "create")
-        self.assertEqual(payload["amount"], 0.5)
+        self.assertEqual(payload["amount"], 25)
         self.assertEqual(payload["tokenMetadata"]["uri"], "https://ipfs.example/meta.json")
         [raw] = self.chain.sent
         tx = VersionedTransaction.from_bytes(raw)

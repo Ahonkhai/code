@@ -26,16 +26,15 @@ LAUNCH_OVERHEAD_SOL = 0.03
 
 NAME_PROMPT = "📝 <b>Token name</b> (1-{max})\nTip: Latest, Hot Tokens."
 SYMBOL_PROMPT = f"🔤 Enter <b>SYMBOL</b> ({SYMBOL_MIN}-{SYMBOL_MAX}, A-Z)\nExample: $PEPE"
+# SOL bought by the creator wallet in the launch transaction.
+TRADE_SIZES = (5, 10, 15, 25)
+TRADE_SIZE_PROMPT = "💰 <b>Choose trade size</b>\nSOL your wallet buys at launch. Tap a size or type an amount."
 IMAGE_PROMPT = f"📷 <b>Upload token image</b>\nPNG/JPG · Square · ≥{MIN_IMAGE_PX}px"
 DESC_PROMPT = f"📝 Send the exact description of the token (≤ {DESC_MAX} chars)\n1-2 lines. Avoid links."
 
 
 def _name_kb() -> InlineKeyboardMarkup:
     return cancel_kb([Btn("🆕 Latest", callback_data="l:latest"), Btn("🔥 Hot", callback_data="l:hot")])
-
-
-def _skip_kb(step: str) -> InlineKeyboardMarkup:
-    return cancel_kb([Btn("⏭ Skip", callback_data=f"l:skip:{step}")])
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -93,31 +92,15 @@ async def receive_text(update: Update, context: ContextTypes.DEFAULT_TYPE, kind:
     elif kind == "launch_image":
         await reply(update, IMAGE_PROMPT, cancel_kb())
 
-    elif kind == "launch_socials":
-        for link in text.split():
-            low = link.lower()
-            if "t.me/" in low:
-                data["telegram"] = link
-            elif "x.com/" in low or "twitter.com/" in low:
-                data["twitter"] = link
-            else:
-                data["website"] = link
-        await _ask_dev_buy(update, context)
-
     elif kind == "launch_devbuy":
         try:
             amount = float(text)
         except ValueError:
-            amount = -1
-        if amount < 0:
-            await reply(update, "❌ Send a SOL amount like 0.25 (or 0).", cancel_kb())
+            amount = 0
+        if amount <= 0:
+            await reply(update, f"❌ Pick a size or send a SOL amount like 3.\n\n{TRADE_SIZE_PROMPT}", _trade_size_kb())
             return
         await _set_dev_buy(update, context, amount)
-
-
-async def skip(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str) -> None:
-    if step == "socials":
-        await _ask_dev_buy(update, context)
 
 
 async def _ask_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -163,25 +146,17 @@ async def receive_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     data = context.user_data.setdefault("launch", {})
     data["image"] = raw
     data["image_name"] = f"image.{ext}"
-    set_awaiting(context, "launch_socials")
-    await reply(
-        update,
-        "🔗 <b>Links</b> (optional): send your X/Twitter, Telegram and website links separated by spaces.",
-        _skip_kb("socials"),
-    )
+    await _ask_dev_buy(update, context)
 
 
 async def _ask_dev_buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     set_awaiting(context, "launch_devbuy")
-    await reply(
-        update,
-        "💰 <b>Dev buy</b>: how much SOL should your wallet buy at launch?\n"
-        "Pick an amount or type one. The buy is made openly from your default wallet.",
-        cancel_kb(
-            [Btn("0", callback_data="l:dev:0"), Btn("0.1", callback_data="l:dev:0.1"), Btn("0.5", callback_data="l:dev:0.5")],
-            [Btn("1", callback_data="l:dev:1"), Btn("2", callback_data="l:dev:2")],
-        ),
-    )
+    await reply(update, TRADE_SIZE_PROMPT, _trade_size_kb())
+
+
+def _trade_size_kb() -> InlineKeyboardMarkup:
+    rows = [TRADE_SIZES[i : i + 2] for i in range(0, len(TRADE_SIZES), 2)]
+    return cancel_kb(*[[Btn(f"{a} SOL", callback_data=f"l:dev:{a}") for a in row] for row in rows])
 
 
 async def _set_dev_buy(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: float) -> None:
@@ -201,22 +176,20 @@ async def _set_dev_buy(update: Update, context: ContextTypes.DEFAULT_TYPE, amoun
         await reply(
             update,
             f"❌ {esc(wallet.label)} has {balance:.4f} SOL; this launch needs about {needed:.4f} SOL.\n"
-            f"Fund <code>{wallet.pubkey}</code> or pick a smaller dev buy.",
-            cancel_kb(),
+            f"Fund <code>{wallet.pubkey}</code> or pick a smaller size.",
+            _trade_size_kb(),
         )
         return
     data["dev_buy"] = amount
     set_awaiting(context, None)
-    links = "\n".join(f"{k.title()}: {esc(data[k])}" for k in ("twitter", "telegram", "website") if data.get(k))
     text = (
         "🚀 <b>Confirm launch</b>\n\n"
         f"Name: <b>{esc(data['name'])}</b>\n"
         f"Symbol: <b>${esc(data['symbol'])}</b>\n"
         f"Description: {esc(data.get('description') or '—')}\n"
-        f"{links + chr(10) if links else ''}"
         f"Platform: pump.fun\n"
         f"Creator wallet: {esc(wallet.label)} ({short(wallet.pubkey)})\n"
-        f"Dev buy: {amount} SOL\n"
+        f"Trade size: {amount:g} SOL\n"
         f"Slippage: {settings.slippage}% · Priority fee: {settings.priority_fee} SOL"
     )
     await reply(update, text, cancel_kb([Btn("✅ Launch", callback_data="l:confirm")]))
@@ -240,9 +213,6 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         name=data["name"],
         symbol=data["symbol"],
         description=data.get("description", ""),
-        twitter=data.get("twitter", ""),
-        telegram=data.get("telegram", ""),
-        website=data.get("website", ""),
     )
     await reply(update, "⏳ Uploading metadata and building the launch transaction…")
     try:

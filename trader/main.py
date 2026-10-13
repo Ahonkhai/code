@@ -76,8 +76,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await launch.start(update, context)
         elif action in ("latest", "hot"):
             await launch.show_trending(update, context, action)
-        elif action == "skip":
-            await launch.skip(update, context, args[0])
         elif action == "dev":
             await launch.dev_buy_button(update, context, args[0])
         elif action == "confirm":
